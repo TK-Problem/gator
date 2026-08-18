@@ -55,7 +55,8 @@ func write(cfg Config) error {
 		return err
 	}
 
-	file, err := os.Create(fullPath)
+	// 0600: the config holds the database password.
+	file, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
