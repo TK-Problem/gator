@@ -11,19 +11,14 @@ import (
 	"github.com/google/uuid"
 )
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 2 {
 		return fmt.Errorf("usage: %s <name> <url>", cmd.Name)
 	}
 	name := cmd.Args[0]
 	url := cmd.Args[1]
 
-	user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return fmt.Errorf("couldn't find current user %s: %w", s.cfg.CurrentUserName, err)
-	}
-
-	_, err = s.db.GetFeedByURL(context.Background(), url)
+	_, err := s.db.GetFeedByURL(context.Background(), url)
 	if err == nil {
 		return fmt.Errorf("feed with url %s already exists", url)
 	}
