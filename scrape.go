@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"time"
+
+	"github.com/TK-Problem/gator/internal/database"
+	"github.com/google/uuid"
 )
 
-// scrapeFeeds fetches the least recently fetched feed and prints its posts.
+// scrapeFeeds fetches the least recently fetched feed and saves its posts.
 // It logs its own failures instead of returning them so that the agg loop
 // keeps running when a single feed or request goes bad.
 func scrapeFeeds(s *state) {
@@ -28,8 +33,24 @@ func scrapeFeeds(s *state) {
 		return
 	}
 
-	fmt.Printf("Found %d posts in %s\n", len(rssFeed.Channel.Item), feed.Name)
 	for _, item := range rssFeed.Channel.Item {
-		fmt.Printf("* %s\n", item.Title)
+		err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: item.Description != ""},
+			PublishedAt: parsePubDate(item.PubDate),
+			FeedID:      feed.ID,
+		})
+		if err != nil {
+			// Duplicate URLs are swallowed by ON CONFLICT DO NOTHING, so
+			// anything landing here is a real problem worth seeing.
+			log.Printf("couldn't save post %s: %v", item.Link, err)
+			continue
+		}
 	}
+
+	fmt.Printf("Feed %s collected, %d posts found\n", feed.Name, len(rssFeed.Channel.Item))
 }

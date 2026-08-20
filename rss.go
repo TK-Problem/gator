@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -24,6 +26,36 @@ type RSSItem struct {
 	Link        string `xml:"link"`
 	Description string `xml:"description"`
 	PubDate     string `xml:"pubDate"`
+}
+
+// pubDateLayouts are the formats feeds use for <pubDate>, tried in order.
+var pubDateLayouts = []string{
+	time.RFC1123Z, // Mon, 02 Jan 2006 15:04:05 -0700
+	time.RFC1123,  // Mon, 02 Jan 2006 15:04:05 MST
+	time.RFC822Z,  // 02 Jan 06 15:04 -0700
+	time.RFC822,   // 02 Jan 06 15:04 MST
+	time.RFC3339,  // 2006-01-02T15:04:05Z07:00
+	"2006-01-02 15:04:05",
+	"2006-01-02",
+}
+
+// parsePubDate converts a feed's pubDate string into a nullable timestamp.
+// An empty or unrecognized value yields NULL rather than an error: a post is
+// still worth storing even when we can't tell exactly when it was published.
+func parsePubDate(pubDate string) sql.NullTime {
+	pubDate = strings.TrimSpace(pubDate)
+	if pubDate == "" {
+		return sql.NullTime{}
+	}
+
+	for _, layout := range pubDateLayouts {
+		t, err := time.Parse(layout, pubDate)
+		if err == nil {
+			return sql.NullTime{Time: t, Valid: true}
+		}
+	}
+
+	return sql.NullTime{}
 }
 
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
